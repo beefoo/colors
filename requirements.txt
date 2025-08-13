@@ -1,5 +1,6 @@
 jupyter
 matplotlib
+opencv-contrib-python
 opencv-python
 pandas
 Pillow

@@ -1,1 +1,3 @@
 *.pyc
+scripts/weights/*
+!scripts/weights/.keep

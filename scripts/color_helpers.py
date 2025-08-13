@@ -1,4 +1,6 @@
-"""Helper functions to support scripts and notebooks"""
+"""
+Helper functions for image processing and color analysis
+"""
 
 from colorsys import rgb_to_hsv, hsv_to_rgb
 import io
@@ -48,13 +50,14 @@ def get_colors(img):
     return [color for count, color in img.convert('RGB').getcolors(w * h)]
 
 # Adapted from: https://github.com/LibraryOfCongress/data-exploration/blob/master/loc.gov%20JSON%20API/Dominant%20colors.ipynb
-def get_dominant_colors(img, n = 6, order_by = 'hue', brightness_range = (0.0, 1.0), saturation_range = (0.0, 1.0), thumb = 200):
+def get_dominant_colors(img, n = 6, order_by = 'hue', brightness_range = (0.0, 1.0), saturation_range = (0.0, 1.0), size = 200):
     """
     Return most dominant 'n' colors
     """
-    thumb_size = (thumb, thumb)
-    img.thumbnail(thumb_size) # replace with a thumbnail with same aspect ratio, no larger than THUMB_SIZE
-    rgbs = get_colors(img) # gets a list of RGB colors (e.g. (213, 191, 152)) for each pixel
+    thumb = img.copy()
+    thumb_size = (size, size)
+    thumb.thumbnail(thumb_size) # replace with a thumbnail with same aspect ratio, no larger than THUMB_SIZE
+    rgbs = get_colors(thumb) # gets a list of RGB colors (e.g. (213, 191, 152)) for each pixel
     # adjust the value of each color, if you've chosen to change minimum and maximum values
     rgbs = filter_colors(rgbs, "saturation", saturation_range)
     rgbs = filter_colors(rgbs, "brightness", brightness_range)
