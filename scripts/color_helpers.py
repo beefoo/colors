@@ -109,7 +109,7 @@ def get_segments_from_color(img, color, count = 3, distance_threshold = 128):
         components.append({
             "label": i,
             "size": sizes[i],
-            "centroid": centroids[i]
+            "centroid": [int(round(v)) for v in centroids[i]]
         })
     components = sorted(components, key=lambda c: -c["size"])
     if len(components) > count:
