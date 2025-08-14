@@ -1,3 +1,5 @@
 *.pyc
 scripts/weights/*
 !scripts/weights/.keep
+scripts/tmp/*
+!scripts/tmp/.keep

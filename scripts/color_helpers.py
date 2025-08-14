@@ -3,8 +3,9 @@ Helper functions for image processing and color analysis
 """
 
 from colorsys import rgb_to_hsv, hsv_to_rgb
+import cv2
 import io
-from numpy import array
+import numpy as np
 from PIL import Image, ImageDraw
 import requests
 from scipy.cluster.vq import kmeans
@@ -62,10 +63,10 @@ def get_dominant_colors(img, n = 6, order_by = 'hue', brightness_range = (0.0, 1
     rgbs = filter_colors(rgbs, "saturation", saturation_range)
     rgbs = filter_colors(rgbs, "brightness", brightness_range)
     # turns the list of colors into a numpy array of floats, then applies scipy's k-means function
-    clusters, _ = kmeans(array(rgbs).astype(float), n)
+    clusters, _ = kmeans(np.array(rgbs).astype(float), n)
     colors = order_colors(clusters, order_by) if order_by != 'none' else clusters
-    hex_colors = list(map(hexify, colors)) # turn RGB into hex colors for web
-    return hex_colors
+    # hex_colors = list(map(hexify, colors)) # turn RGB into hex colors for web
+    return colors
 
 def get_image_from_url(url):
     """Download and open an image from a URL to memory"""
@@ -77,6 +78,48 @@ def get_image_from_url(url):
     im = Image.open(image_filestream)
 
     return im
+
+def get_segments_from_color(img, color, count = 3, distance_threshold = 128):
+    """
+    Return connected segments that are around a particular color
+    """
+    ref_color = np.array(color, dtype=np.uint8)
+    original_w, original_h = img.size
+    thumb = img.copy()
+    thumb_size = 512
+    thumb.thumbnail((thumb_size, thumb_size))
+    np_img = np.array(thumb, dtype=np.uint8)
+    h, w, _ = np_img.shape
+    color_mask = np.zeros((h, w), dtype=np.uint8)
+    for x in range(w):
+        for y in range(h):
+            candidate_color = np_img[y, x]
+            dist = np.linalg.norm(candidate_color - ref_color)
+            if dist < distance_threshold:
+                color_mask[y, x] = 255
+    color_mask = Image.fromarray(color_mask)
+    color_mask = color_mask.resize((original_w, original_h))
+    np_color_mask = np.array(color_mask)
+    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(
+        np_color_mask, connectivity=8
+    )
+    sizes = stats[:, -1]
+    components = []
+    for i in range(1, nb_components):
+        components.append({
+            "label": i,
+            "size": sizes[i],
+            "centroid": centroids[i]
+        })
+    components = sorted(components, key=lambda c: -c["size"])
+    if len(components) > count:
+        components = components[:count]
+    for i, c in enumerate(components):
+        mask = np.zeros(output.shape, dtype=np.uint8)
+        mask[output == c["label"]] = 255
+        components[i]["mask"] = mask
+    return components
+
 
 def hexify(rgb):
     """

@@ -19,6 +19,13 @@ from segment_anything.utils.amg import (
     rle_to_mask,
 )
 
+def bbox_mask(mask):
+    rows = np.any(mask, axis=1)
+    cols = np.any(mask, axis=0)
+    x0, x1 = np.where(rows)[0][[0, -1]]
+    y0, y1 = np.where(cols)[0][[0, -1]]
+    return (x0, y0, x1, y1)
+
 def download_file(url, filename):
     with requests.get(url, stream=True) as r:
         with open(filename, 'wb') as f:
@@ -51,6 +58,11 @@ def get_all_masks(pil_image, model):
     rle = [mask_to_rle_pytorch(m[0:1]) for m in predicted_masks]
     predicted_masks = process_small_region(rle)
     return predicted_masks
+
+def get_image_segment(image, mask):
+    x0, y0, x1, y1 = bbox_mask(mask)
+    bounded_mask = mask[y0: y1, x0: x1]
+    bounded_mask_img = Image.fromarray(np.uint8(bounded_mask * 255))
 
 def get_predictions_given_embeddings_and_queries(img, points, point_labels, model):
     predicted_masks, predicted_iou = model(
