@@ -6,23 +6,19 @@ from colorsys import rgb_to_hsv, hsv_to_rgb
 import cv2
 import io
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 import requests
 from scipy.cluster.vq import kmeans
 
-def filter_colors(rgbs, property, value_range):
+def bbox_mask(mask):
     """
-    Filter a color such that the value (brightness or saturation) is within value_range.
+    Retrieve the bounding box of a mask
     """
-    min_v, max_v = value_range
-    filtered = []
-    for rgb in rgbs:
-        h, s, v = rgb_to_hsv(*map(scale_down, rgb))
-        if property == "saturation" and s >= min_v and s <= max_v:
-            filtered.append(rgb)
-        elif v >= min_v and v <= max_v:
-            filtered.append(rgb)
-    return filtered
+    rows = np.any(mask, axis=1)
+    cols = np.any(mask, axis=0)
+    y0, y1 = np.where(rows > 0)[0][[0, -1]]
+    x0, x1 = np.where(cols > 0)[0][[0, -1]]
+    return (x0, y0, x1, y1)
 
 def draw_colors(colors, height = 40):
     """
@@ -38,6 +34,42 @@ def draw_colors(colors, height = 40):
         y1 = height
         draw.rectangle([x0, y0, x1, y1], color)
     return im
+
+def filter_colors(rgbs, property, value_range):
+    """
+    Filter a color such that the value (brightness or saturation) is within value_range.
+    """
+    min_v, max_v = value_range
+    filtered = []
+    for rgb in rgbs:
+        h, s, v = rgb_to_hsv(*map(scale_down, rgb))
+        if property == "saturation" and s >= min_v and s <= max_v:
+            filtered.append(rgb)
+        elif v >= min_v and v <= max_v:
+            filtered.append(rgb)
+    return filtered
+
+def get_clipped_images_from_mask(img, mask, n):
+    """
+    Returns clipped images from an image and mask
+    """
+    nb_components, output, stats, _centroids = cv2.connectedComponentsWithStats(
+        mask, connectivity=8
+    )
+    sizes = stats[:, -1]
+    components = []
+    for i in range(1, nb_components):
+        components.append((i, sizes[i]))
+    components = sorted(components, key=lambda c: -c[1])
+    if len(components) > n:
+        components = components[:n]
+    images = []
+    for c in components:
+        mask = np.zeros(output.shape, dtype=np.uint8)
+        mask[output == c[0]] = 255
+        image = get_image_clip(img, mask)
+        images.append(image)
+    return images
 
 def get_colors(img):
     """
@@ -69,7 +101,9 @@ def get_dominant_colors(img, n = 6, order_by = 'hue', brightness_range = (0.0, 1
     return colors
 
 def get_image_from_url(url):
-    """Download and open an image from a URL to memory"""
+    """
+    Download and open an image from a URL to 
+    """
     # Download the image to memory
     response = requests.get(url, timeout=60)
     image_filestream = io.BytesIO(response.content)
@@ -78,6 +112,21 @@ def get_image_from_url(url):
     im = Image.open(image_filestream)
 
     return im
+
+def get_image_clip(image, mask):
+    """
+    Retrieve a clipped image from a mask
+    """
+    x0, y0, x1, y1 = bbox_mask(mask)
+    bounded_mask_img = Image.fromarray(mask)
+    bounded_mask_img = ImageOps.invert(bounded_mask_img)
+    bounded_mask_img = bounded_mask_img.crop((x0, y0, x1, y1))
+    cropped_image = image.crop((x0, y0, x1, y1))
+    cropped_image = cropped_image.convert("RGBA")
+    w, h = cropped_image.size
+    base = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    clip_img = Image.composite(base, cropped_image, bounded_mask_img)
+    return clip_img
 
 def get_segments_from_color(img, color, count = 3, distance_threshold = 128):
     """

@@ -20,25 +20,12 @@ from segment_anything.utils.amg import (
     rle_to_mask,
 )
 from torchvision.ops.boxes import batched_nms
-     
-def bbox_mask(mask):
-    rows = np.any(mask, axis=1)
-    cols = np.any(mask, axis=0)
-    x0, x1 = np.where(rows)[0][[0, -1]]
-    y0, y1 = np.where(cols)[0][[0, -1]]
-    return (x0, y0, x1, y1)
 
 def download_file(url, filename):
     with requests.get(url, stream=True) as r:
         with open(filename, 'wb') as f:
             shutil.copyfileobj(r.raw, f)
     return filename
-
-
-def get_image_segment(image, mask):
-    x0, y0, x1, y1 = bbox_mask(mask)
-    bounded_mask = mask[y0: y1, x0: x1]
-    bounded_mask_img = Image.fromarray(np.uint8(bounded_mask * 255))
 
 def get_segment_from_point_or_box(pil_image, pts_sampled, pts_labels, model, min_area = 200, nms_thresh = 0.7):
     image_np = np.array(pil_image)
