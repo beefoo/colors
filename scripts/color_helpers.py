@@ -8,7 +8,7 @@ import io
 import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 import requests
-from scipy.cluster.vq import kmeans
+from scipy.cluster.vq import kmeans, kmeans2
 
 def bbox_mask(mask):
     """
@@ -53,20 +53,11 @@ def get_clipped_images_from_mask(img, mask, n):
     """
     Returns clipped images from an image and mask
     """
-    nb_components, output, stats, _centroids = cv2.connectedComponentsWithStats(
-        mask, connectivity=8
-    )
-    sizes = stats[:, -1]
-    components = []
-    for i in range(1, nb_components):
-        components.append((i, sizes[i]))
-    components = sorted(components, key=lambda c: -c[1])
-    if len(components) > n:
-        components = components[:n]
+    components, output, _mask = get_connected_components(mask, n)
     images = []
-    for c in components:
+    for label, _size, _centroid in components:
         mask = np.zeros(output.shape, dtype=np.uint8)
-        mask[output == c[0]] = 255
+        mask[output == label] = 255
         image = get_image_clip(img, mask)
         images.append(image)
     return images
@@ -80,25 +71,55 @@ def get_colors(img):
     # getcolors() returns an unsorted list of (count, pixel) values
     # w * h ensures that maxcolors parameter is set so that each pixel could be unique
     # there are three values returned in a list
-    return [color for count, color in img.convert('RGB').getcolors(w * h)]
+    img = img.convert('RGB')
+    np_img = np.array(img)
+    np_img = np.reshape(np_img, (w * h, 3))
+    return np_img
+
+def get_connected_components(img, max_number = -1, connectivity = 8):
+    """
+    Returns the largest components
+    """
+    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(
+        img, connectivity
+    )
+    sizes = stats[:, -1]
+    components = []
+    for i in range(1, nb_components):
+        components.append((i, sizes[i], centroids[i]))
+    components = sorted(components, key=lambda c: -c[1])
+    if max_number > 0 and len(components) > max_number:
+        components = components[:max_number]
+    mask = np.zeros(output.shape, dtype=np.uint8)
+    for label, _size, _centroid in components:
+        mask[output == label] = 255
+    mask = Image.fromarray(mask)
+    return components, output, mask
 
 # Adapted from: https://github.com/LibraryOfCongress/data-exploration/blob/master/loc.gov%20JSON%20API/Dominant%20colors.ipynb
-def get_dominant_colors(img, n = 6, order_by = 'hue', brightness_range = (0.0, 1.0), saturation_range = (0.0, 1.0), size = 200):
+def get_dominant_colors(img, n = 6, order_by = 'hue', brightness_range = (0.0, 1.0), saturation_range = (0.0, 1.0), size = 256):
     """
     Return most dominant 'n' colors
     """
+    w, h = img.size
     thumb = img.copy()
     thumb_size = (size, size)
     thumb.thumbnail(thumb_size) # replace with a thumbnail with same aspect ratio, no larger than THUMB_SIZE
+    tw, th = thumb.size
+    # thumb = ImageOps.posterize(thumb, 4)
     rgbs = get_colors(thumb) # gets a list of RGB colors (e.g. (213, 191, 152)) for each pixel
     # adjust the value of each color, if you've chosen to change minimum and maximum values
-    rgbs = filter_colors(rgbs, "saturation", saturation_range)
-    rgbs = filter_colors(rgbs, "brightness", brightness_range)
+    # rgbs = filter_colors(rgbs, "saturation", saturation_range)
+    # rgbs = filter_colors(rgbs, "brightness", brightness_range)
     # turns the list of colors into a numpy array of floats, then applies scipy's k-means function
-    clusters, _ = kmeans(np.array(rgbs).astype(float), n)
+    clusters, labels = kmeans2(np.array(rgbs).astype(float), n)
     colors = order_colors(clusters, order_by) if order_by != 'none' else clusters
     # hex_colors = list(map(hexify, colors)) # turn RGB into hex colors for web
-    return colors
+    labels = labels.reshape((th, tw))
+    labels = Image.fromarray(labels)
+    labels = labels.resize((w, h), Image.Resampling.NEAREST)
+    labels = np.array(labels)
+    return colors, labels
 
 def get_image_from_url(url):
     """
@@ -137,6 +158,7 @@ def get_segments_from_color(img, color, count = 3, distance_threshold = 128):
     thumb = img.copy()
     thumb_size = 512
     thumb.thumbnail((thumb_size, thumb_size))
+    thumb = ImageOps.posterize(thumb, 4)
     np_img = np.array(thumb, dtype=np.uint8)
     h, w, _ = np_img.shape
     color_mask = np.zeros((h, w), dtype=np.uint8)
@@ -185,10 +207,10 @@ def order_colors(colors, order_by):
         index = 1
     elif order_by == 'brightness':
         index = 2
-    hsvs = [rgb_to_hsv(*map(scale_down, color)) for color in colors]
+    hsvs = [(i, rgb_to_hsv(*map(scale_down, color))) for i, color in enumerate(colors)]
     invert = -1 if order_by == "saturation" else 1
-    hsvs.sort(key=lambda t: invert * t[index])
-    return [tuple(map(scale_up, hsv_to_rgb(*hsv))) for hsv in hsvs]
+    hsvs.sort(key=lambda t: invert * t[1][index])
+    return [(i, tuple(map(scale_up, hsv_to_rgb(*hsv)))) for i, hsv in hsvs]
 
 def scale_down(x, scale = 255.0):
     """
