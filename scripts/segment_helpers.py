@@ -3,16 +3,13 @@ Helpers for automatic image segmentation, adapted from:
 https://github.com/yformer/EfficientSAM/blob/main/notebooks/EfficientSAM_segment_everything_example.ipynb
 https://github.com/yformer/EfficientSAM/blob/main/notebooks/EfficientSAM_example.ipynb
 """
-import shutil
+
 
 import numpy as np
-from PIL import Image
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torchvision.transforms import ToTensor
-from PIL import Image
-import requests
 from segment_anything.utils.amg import (
     batched_mask_to_box,
     mask_to_rle_pytorch,
@@ -20,12 +17,6 @@ from segment_anything.utils.amg import (
     rle_to_mask,
 )
 from torchvision.ops.boxes import batched_nms
-
-def download_file(url, filename):
-    with requests.get(url, stream=True) as r:
-        with open(filename, 'wb') as f:
-            shutil.copyfileobj(r.raw, f)
-    return filename
 
 def get_segment_from_point_or_box(pil_image, pts_sampled, pts_labels, model, min_area = 200, nms_thresh = 0.7):
     image_np = np.array(pil_image)

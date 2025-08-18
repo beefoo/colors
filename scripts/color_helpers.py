@@ -4,10 +4,8 @@ Helper functions for image processing and color analysis
 
 from colorsys import rgb_to_hsv, hsv_to_rgb
 import cv2
-import io
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
-import requests
 from scipy.cluster.vq import kmeans, kmeans2
 
 def bbox_mask(mask):
@@ -120,19 +118,6 @@ def get_dominant_colors(img, n = 6, order_by = 'hue', brightness_range = (0.0, 1
     labels = labels.resize((w, h), Image.Resampling.NEAREST)
     labels = np.array(labels)
     return colors, labels
-
-def get_image_from_url(url):
-    """
-    Download and open an image from a URL to 
-    """
-    # Download the image to memory
-    response = requests.get(url, timeout=60)
-    image_filestream = io.BytesIO(response.content)
-
-    # And read the image data
-    im = Image.open(image_filestream)
-
-    return im
 
 def get_image_clip(image, mask, smoothing=12):
     """

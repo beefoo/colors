@@ -3,6 +3,7 @@ matplotlib
 opencv-python
 pandas
 Pillow
+pytesseract
 requests
 scipy
 git+https://github.com/facebookresearch/segment-anything.git
