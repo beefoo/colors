@@ -6,7 +6,7 @@ from colorsys import rgb_to_hsv, hsv_to_rgb
 import cv2
 import io
 import numpy as np
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 import requests
 from scipy.cluster.vq import kmeans, kmeans2
 
@@ -49,7 +49,7 @@ def filter_colors(rgbs, property, value_range):
             filtered.append(rgb)
     return filtered
 
-def get_clipped_images_from_mask(img, mask, n):
+def get_clipped_images_from_mask(img, mask, n, smoothing=12):
     """
     Returns clipped images from an image and mask
     """
@@ -58,7 +58,7 @@ def get_clipped_images_from_mask(img, mask, n):
     for label, _size, _centroid in components:
         mask = np.zeros(output.shape, dtype=np.uint8)
         mask[output == label] = 255
-        image = get_image_clip(img, mask)
+        image = get_image_clip(img, mask, smoothing)
         images.append(image)
     return images
 
@@ -134,7 +134,7 @@ def get_image_from_url(url):
 
     return im
 
-def get_image_clip(image, mask):
+def get_image_clip(image, mask, smoothing=12):
     """
     Retrieve a clipped image from a mask
     """
@@ -142,6 +142,8 @@ def get_image_clip(image, mask):
     bounded_mask_img = Image.fromarray(mask)
     bounded_mask_img = ImageOps.invert(bounded_mask_img)
     bounded_mask_img = bounded_mask_img.crop((x0, y0, x1, y1))
+    # Smooth the edges
+    bounded_mask_img = bounded_mask_img.filter(ImageFilter.ModeFilter(size=smoothing))
     cropped_image = image.crop((x0, y0, x1, y1))
     cropped_image = cropped_image.convert("RGBA")
     w, h = cropped_image.size
@@ -158,7 +160,6 @@ def get_segments_from_color(img, color, count = 3, distance_threshold = 128):
     thumb = img.copy()
     thumb_size = 512
     thumb.thumbnail((thumb_size, thumb_size))
-    thumb = ImageOps.posterize(thumb, 4)
     np_img = np.array(thumb, dtype=np.uint8)
     h, w, _ = np_img.shape
     color_mask = np.zeros((h, w), dtype=np.uint8)
